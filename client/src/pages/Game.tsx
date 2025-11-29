@@ -94,6 +94,8 @@ export default function Game() {
       passiveDesc: "Higher Black Flash chance",
       baseDamage: 55,
       critMultiplier: 3.0,
+      glowColor: "#ef4444",
+      domainClass: "bg-red-900/40",
     },
     gojo: {
       name: "SATORU GOJO",
@@ -105,6 +107,8 @@ export default function Game() {
       passiveDesc: "Infinity reduces energy cost",
       baseDamage: 70,
       critMultiplier: 2.5,
+      glowColor: "#00ffff",
+      domainClass: "bg-white/20 mix-blend-overlay",
     },
     megumi: {
       name: "MEGUMI FUSHIGURO",
@@ -116,6 +120,8 @@ export default function Game() {
       passiveDesc: "Summons deal extra damage",
       baseDamage: 50,
       critMultiplier: 2.8,
+      glowColor: "#8b5cf6",
+      domainClass: "bg-purple-900/50",
     },
     nobara: {
       name: "NOBARA KUGISAKI",
@@ -127,6 +133,8 @@ export default function Game() {
       passiveDesc: "Attacks cause bleeding",
       baseDamage: 60,
       critMultiplier: 2.6,
+      glowColor: "#f59e0b",
+      domainClass: "bg-orange-900/40",
     },
   };
 
@@ -684,7 +692,7 @@ export default function Game() {
           <motion.div 
             className={`absolute w-20 h-20 rounded-full blur-xl opacity-30 -z-10`}
             style={{ 
-              background: `radial-gradient(circle, ${character === 'gojo' ? '#00ffff' : character === 'megumi' ? '#8b5cf6' : character === 'nobara' ? '#f59e0b' : '#ef4444'} 0%, transparent 70%)` 
+              background: `radial-gradient(circle, ${currentConfig.glowColor} 0%, transparent 70%)` 
             }}
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
@@ -806,7 +814,7 @@ export default function Game() {
              initial={{ opacity: 0, scale: 0.5 }}
              animate={{ opacity: 1, scale: 1 }}
              exit={{ opacity: 0 }}
-             className={`absolute inset-0 z-0 pointer-events-none backdrop-blur-[2px] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] ${character === 'gojo' ? 'bg-white/20 mix-blend-overlay' : character === 'megumi' ? 'bg-purple-900/50' : 'bg-red-900/40'}`}
+             className={`absolute inset-0 z-0 pointer-events-none backdrop-blur-[2px] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] ${currentConfig.domainClass}`}
            />
         )}
 
