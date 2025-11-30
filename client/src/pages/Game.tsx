@@ -150,6 +150,9 @@ export default function Game() {
   // Calculate current grade based on experience
   const currentGrade = calculateGrade(experience);
 
+  // Get current character configuration
+  const currentConfig = charConfig[character];
+
   const logEvent = useCallback(
     (message: string, tone: BattleLogEntry["tone"] = "info") => {
       setBattleLog((prev) => {
