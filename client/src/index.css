@@ -163,6 +163,97 @@
   .target-pointer {
     filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.5));
   }
+
+  .cinematic-card {
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);
+    border-radius: var(--radius-lg);
+  }
+
+  .cinematic-card__glow,
+  .cinematic-card__grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .cinematic-card__glow {
+    background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.25), transparent 60%),
+                radial-gradient(circle at 80% 30%, rgba(244, 114, 182, 0.25), transparent 65%);
+    filter: blur(20px);
+    opacity: 0.5;
+    animation: holoPulse 6s ease-in-out infinite;
+  }
+
+  .cinematic-card__grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 22px 22px;
+    opacity: 0.4;
+    mix-blend-mode: screen;
+    animation: holoPan 20s linear infinite;
+  }
+
+  .cinematic-chip {
+    min-width: 130px;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .gauge-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-width: 6;
+  }
+
+  .gauge-progress {
+    fill: none;
+    stroke: #facc15;
+    stroke-width: 6;
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+  }
+
+  .world-holo-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 80px 80px;
+    opacity: 0.15;
+    mix-blend-mode: screen;
+    animation: holoPan 45s linear infinite;
+  }
+
+  .world-holo-grid--secondary {
+    opacity: 0.08;
+    transform: rotate(90deg);
+    animation-duration: 60s;
+  }
+
+  .world-glyphs {
+    font-family: 'Noto Sans JP', var(--font-orbitron), sans-serif;
+  }
+
+  .world-glyph {
+    position: absolute;
+    font-size: clamp(1.5rem, 2.5vw, 2.75rem);
+    color: rgba(255, 255, 255, 0.25);
+    text-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+  }
+
+  .ambient-ring {
+    position: absolute;
+    width: 7rem;
+    height: 7rem;
+    border-radius: 9999px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    filter: drop-shadow(0 0 25px rgba(255, 255, 255, 0.35));
+  }
+
+  .ambient-ring--domain {
+    border-color: rgba(167, 139, 250, 0.9);
+    box-shadow: 0 0 30px rgba(167, 139, 250, 0.6);
+  }
 }
 
 @keyframes float {
@@ -241,6 +332,17 @@
 @keyframes radarSweep {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+@keyframes holoPulse {
+    0% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 0.6; transform: scale(1); }
+    100% { opacity: 0.3; transform: scale(0.8); }
+}
+
+@keyframes holoPan {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-100%); }
 }
 
 @keyframes particleBurst {

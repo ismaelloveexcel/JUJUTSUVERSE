@@ -60,6 +60,18 @@ const calculateGrade = (exp: number): string => {
   return "Grade 4 Sorcerer";
 };
 
+const gradeStages = [
+  { min: 0, label: "Grade 4 Sorcerer" },
+  { min: 100, label: "Grade 3 Sorcerer" },
+  { min: 300, label: "Grade 2 Sorcerer" },
+  { min: 800, label: "Semi-Grade 1" },
+  { min: 2000, label: "Grade 1 Sorcerer" },
+  { min: 5000, label: "Special Grade" },
+];
+
+const THREAT_GAUGE_RADIUS = 54;
+const THREAT_GAUGE_CIRC = 2 * Math.PI * THREAT_GAUGE_RADIUS;
+
 export default function Game() {
   // Game State
   const [character, setCharacter] = useState<Character>("yuji");
@@ -84,6 +96,16 @@ export default function Game() {
   const [battleLog, setBattleLog] = useState<BattleLogEntry[]>([
     { id: Date.now(), message: "Welcome to the JujutsuVerse. Keep your guard up.", tone: "info" },
   ]);
+  const hologramGlyphs = useMemo(() => {
+    const symbols = ["呪", "術", "陣", "封", "契"];
+    return Array.from({ length: 5 }, (_, index) => ({
+      id: `glyph-${index}`,
+      x: Math.random() * 70 + 15,
+      y: Math.random() * 70 + 15,
+      symbol: symbols[index % symbols.length],
+      delay: Math.random() * 2,
+    }));
+  }, []);
 
   // Refs
   const trainingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -147,8 +169,17 @@ export default function Game() {
     },
   };
 
+  const currentConfig = useMemo(() => charConfig[character], [character]);
+
   // Calculate current grade based on experience
   const currentGrade = calculateGrade(experience);
+  const nextGrade = useMemo(() => {
+    const upcoming = gradeStages.find(stage => stage.min > experience);
+    if (!upcoming) {
+      return { label: "Special Grade", remaining: 0 };
+    }
+    return { label: upcoming.label, remaining: upcoming.min - experience };
+  }, [experience]);
 
   const logEvent = useCallback(
     (message: string, tone: BattleLogEntry["tone"] = "info") => {
@@ -173,6 +204,83 @@ export default function Game() {
   const pendingTechniqueEnergy = Math.max(0, techniqueCost - Math.floor(cursedEnergy));
   const threatPercent = Math.round(threatLevel * 100);
   const comboHeatPercent = Math.round(comboHeat * 100);
+  const threatArc = useMemo(
+    () => THREAT_GAUGE_CIRC - (THREAT_GAUGE_CIRC * threatPercent) / 100,
+    [threatPercent]
+  );
+  const cinematicMood = useMemo(() => {
+    if (domainActive) {
+      return {
+        title: "Domain Amplification",
+        subtitle: "Reality bends around you. Sustain focus until collapse.",
+        gradient: "from-purple-900/80 via-indigo-800/70 to-cyan-500/20",
+        border: "border-purple-400/40",
+        accent: "text-purple-200",
+      };
+    }
+    if (threatLevel > 0.75) {
+      return {
+        title: "Overclocked Battlefield",
+        subtitle: "Critical curse pressure detected. Chain attacks relentlessly.",
+        gradient: "from-rose-900/80 via-red-800/70 to-amber-500/20",
+        border: "border-rose-500/40",
+        accent: "text-rose-200",
+      };
+    }
+    if (threatLevel > 0.4) {
+      return {
+        title: "Hunt In Progress",
+        subtitle: "Maintain tempo and watch cursed energy reserves.",
+        gradient: "from-amber-900/70 via-orange-700/60 to-yellow-500/20",
+        border: "border-amber-400/30",
+        accent: "text-amber-200",
+      };
+    }
+    return {
+      title: "Quiet Before Impact",
+      subtitle: "Use the calm to reposition and recover power.",
+      gradient: "from-emerald-900/70 via-cyan-800/60 to-blue-500/20",
+      border: "border-emerald-400/30",
+      accent: "text-emerald-200",
+    };
+  }, [domainActive, threatLevel]);
+  const statusPills = useMemo(
+    () => [
+      {
+        id: "domain",
+        label: "Domain",
+        value: domainReady ? "Synced" : `-${pendingDomainEnergy} CE`,
+        tone: domainReady ? "ready" : "cooldown",
+      },
+      {
+        id: "technique",
+        label: currentConfig.techniqueName,
+        value: techniqueReady ? "Armed" : `-${pendingTechniqueEnergy} CE`,
+        tone: techniqueReady ? "ready" : "cooldown",
+      },
+      {
+        id: "grade",
+        label: nextGrade.remaining === 0 ? "Rank Stable" : `Next • ${nextGrade.label}`,
+        value: nextGrade.remaining === 0 ? "Max" : `${nextGrade.remaining} XP`,
+        tone: "neutral",
+      },
+      {
+        id: "targets",
+        label: "Targets",
+        value: spirits.length ? `${spirits.length}/8 Active` : "Scanning",
+        tone: spirits.length >= 6 ? "cooldown" : spirits.length === 0 ? "neutral" : "ready",
+      },
+    ],
+    [
+      currentConfig.techniqueName,
+      domainReady,
+      pendingDomainEnergy,
+      nextGrade,
+      pendingTechniqueEnergy,
+      spirits.length,
+      techniqueReady,
+    ]
+  );
   const targetSpirit = useMemo(() => {
     if (spirits.length === 0) return null;
     if (selectedSpiritId) {
@@ -192,6 +300,20 @@ export default function Game() {
     });
     return closest;
   }, [spirits, selectedSpiritId, playerPos]);
+  const heroGuidance = useMemo(() => {
+    if (domainActive) {
+      return "Domain active — reality is on your side. Press the advantage.";
+    }
+    if (!spirits.length) {
+      return "No spirit signatures detected. Keep moving to lure them out.";
+    }
+    if (targetSpirit) {
+      const gradeInfo = getSpiritGradeInfo(targetSpirit.type);
+      const hpPercent = Math.max(0, Math.floor((targetSpirit.hp / targetSpirit.maxHp) * 100));
+      return `Focus ${gradeInfo.label} spirit • ${hpPercent}% integrity remaining`;
+    }
+    return "Scout the arena and charge cursed energy.";
+  }, [domainActive, spirits.length, targetSpirit]);
   const pointerAngle = useMemo(() => {
     if (!targetSpirit) return 0;
     return (Math.atan2(targetSpirit.y - playerPos.y, targetSpirit.x - playerPos.x) * 180) / Math.PI;
@@ -746,6 +868,78 @@ export default function Game() {
         </Button>
       </Card>
 
+      <motion.div
+        className={`relative overflow-hidden rounded-2xl border ${cinematicMood.border} p-6 bg-gradient-to-r ${cinematicMood.gradient} cinematic-card`}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <div className="relative z-10 grid gap-6 md:grid-cols-[1.1fr_0.9fr_1fr] items-center">
+          <div className="space-y-2 text-white">
+            <p className="text-[10px] font-orbitron tracking-[0.4em] text-white/70">FIELD BRIEF</p>
+            <p className={`text-2xl md:text-3xl font-orbitron font-black ${cinematicMood.accent}`}>
+              {cinematicMood.title}
+            </p>
+            <p className="text-sm text-white/80">{cinematicMood.subtitle}</p>
+            <p className="text-xs text-white/60 font-mono">{heroGuidance}</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 text-white">
+            <div className="relative">
+              <svg viewBox="0 0 120 120" className="w-28 h-28">
+                <circle
+                  cx="60"
+                  cy="60"
+                  r={THREAT_GAUGE_RADIUS}
+                  className="gauge-track"
+                />
+                <motion.circle
+                  cx="60"
+                  cy="60"
+                  r={THREAT_GAUGE_RADIUS}
+                  className="gauge-progress"
+                  strokeDasharray={THREAT_GAUGE_CIRC}
+                  strokeDashoffset={threatArc}
+                  animate={{ strokeDashoffset: threatArc }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] tracking-[0.3em] text-white/60">THREAT</span>
+                <span className="text-2xl font-orbitron font-black">{threatPercent}%</span>
+                <span className="text-xs text-white/60 mt-1">{threatLabel}</span>
+              </div>
+            </div>
+
+            <div className="text-xs font-mono text-white/80 space-y-2 w-full max-w-[160px]">
+              <p className="flex justify-between gap-4">
+                <span>Combo</span>
+                <span>{combo}x</span>
+              </p>
+              <p className="flex justify-between gap-4">
+                <span>Energy</span>
+                <span>{energyPercent}%</span>
+              </p>
+              <p className="flex justify-between gap-4">
+                <span>Targets</span>
+                <span>{spirits.length}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 justify-end">
+            {statusPills.map((pill) => (
+              <div key={pill.id} className={`status-chip cinematic-chip ${pill.tone}`}>
+                <span>{pill.label}</span>
+                <span className="font-bold">{pill.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="cinematic-card__glow" />
+        <div className="cinematic-card__grid" />
+      </motion.div>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="p-4 bg-black/70 border-white/10 rounded-2xl backdrop-blur">
           <div className="flex items-center justify-between">
@@ -860,6 +1054,21 @@ export default function Game() {
         onClick={handleGameWorldClick}
       >
         <div className="world-aurora absolute inset-0 pointer-events-none" style={{ opacity: 0.2 + threatLevel * 0.4 }} />
+        <div className="world-holo-grid absolute inset-0 pointer-events-none" />
+        <div className="world-holo-grid world-holo-grid--secondary absolute inset-0 pointer-events-none" />
+        <div className="world-glyphs absolute inset-0 pointer-events-none">
+          {hologramGlyphs.map((glyph) => (
+            <motion.span
+              key={glyph.id}
+              className="world-glyph"
+              style={{ left: `${glyph.x}%`, top: `${glyph.y}%` }}
+              animate={{ opacity: [0.15, 0.6, 0.15], scale: [0.9, 1.1, 0.9] }}
+              transition={{ duration: 4 + glyph.delay, repeat: Infinity, delay: glyph.delay }}
+            >
+              {glyph.symbol}
+            </motion.span>
+          ))}
+        </div>
         <div className="absolute top-4 left-4 z-30 flex items-center gap-2 px-4 py-2 rounded-full bg-black/70 border border-white/10 text-xs font-orbitron tracking-[0.3em] text-white">
           <AlertTriangle className={`h-4 w-4 ${threatLevel > 0.75 ? 'text-red-400' : threatLevel > 0.4 ? 'text-amber-300' : 'text-emerald-300'}`} />
           <span>{threatLabel}</span>
@@ -918,6 +1127,20 @@ export default function Game() {
           }}
           style={{ transform: 'translate(-50%, -50%)' }}
         >
+          {combo >= 3 && (
+            <motion.div 
+              className="ambient-ring"
+              animate={{ scale: [0.9, 1.35, 0.9], opacity: [0.35, 0.08, 0.35] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
+          )}
+          {domainActive && (
+            <motion.div 
+              className="ambient-ring ambient-ring--domain"
+              animate={{ scale: [1.2, 1.8, 1.2], opacity: [0.6, 0.15, 0.6] }}
+              transition={{ duration: 1.8, repeat: Infinity }}
+            />
+          )}
           {currentConfig.avatar}
           {/* Player glow */}
           <motion.div 
