@@ -45,7 +45,7 @@
     @apply border-border;
   }
   body {
-    @apply font-roboto antialiased bg-background text-foreground overflow-hidden h-screen;
+    @apply font-roboto antialiased bg-background text-foreground min-h-screen;
     background: linear-gradient(135deg, #0a0a2a, #1a1a4a, #2d1a4a);
   }
 }

@@ -1,5 +1,5 @@
 modules = ["nodejs-20", "web", "postgresql-16"]
-run = "npm run dev"
+run = "npm run start"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
@@ -16,6 +16,8 @@ externalPort = 80
 
 [env]
 PORT = "5000"
+SESSION_SECRET = "PLEASE_SET_SESSION_SECRET"
+DATABASE_URL = "PLEASE_SET_DATABASE_URL"
 
 [workflows]
 runButton = "Project"
