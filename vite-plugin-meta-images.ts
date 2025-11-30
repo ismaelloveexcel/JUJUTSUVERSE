@@ -40,15 +40,26 @@ export function metaImagesPlugin(): Plugin {
 
       log('[meta-images] updating meta image tags to:', imageUrl);
 
-      html = html.replace(
-        /<meta\s+property="og:image"\s+content="[^"]*"\s*\/>/g,
-        `<meta property="og:image" content="${imageUrl}" />`
-      );
+      const ogTag = `<meta property="og:image" content="${imageUrl}" />`;
+      const twitterTag = `<meta name="twitter:image" content="${imageUrl}" />`;
 
-      html = html.replace(
-        /<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/>/g,
-        `<meta name="twitter:image" content="${imageUrl}" />`
-      );
+      if (/<meta\s+property="og:image"/i.test(html)) {
+        html = html.replace(
+          /<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/gi,
+          ogTag
+        );
+      } else {
+        html = html.replace("</head>", `  ${ogTag}\n</head>`);
+      }
+
+      if (/<meta\s+name="twitter:image"/i.test(html)) {
+        html = html.replace(
+          /<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/gi,
+          twitterTag
+        );
+      } else {
+        html = html.replace("</head>", `  ${twitterTag}\n</head>`);
+      }
 
       return html;
     },
