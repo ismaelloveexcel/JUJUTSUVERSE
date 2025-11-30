@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Footprints, Skull, Zap, Hand, Globe, Play, Square, User, Pause, Trophy, Star, Flame, Keyboard, Target } from "lucide-react";
+import { Footprints, Skull, Zap, Hand, Globe, Play, Square, User, Pause, Trophy, Star, Flame, Keyboard, Target, Shield, AlertTriangle, Radar, Activity, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
@@ -31,6 +31,12 @@ interface Particle {
   y: number;
   color: string;
   size: number;
+}
+
+interface BattleLogEntry {
+  id: number;
+  message: string;
+  tone: "info" | "success" | "danger";
 }
 
 type Character = "yuji" | "gojo" | "megumi" | "nobara";
@@ -75,6 +81,9 @@ export default function Game() {
   const [shake, setShake] = useState(0);
   const [showControls, setShowControls] = useState(false);
   const [selectedSpiritId, setSelectedSpiritId] = useState<number | null>(null);
+  const [battleLog, setBattleLog] = useState<BattleLogEntry[]>([
+    { id: Date.now(), message: "Welcome to the JujutsuVerse. Keep your guard up.", tone: "info" },
+  ]);
 
   // Refs
   const trainingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -141,6 +150,70 @@ export default function Game() {
   // Calculate current grade based on experience
   const currentGrade = calculateGrade(experience);
 
+  const logEvent = useCallback(
+    (message: string, tone: BattleLogEntry["tone"] = "info") => {
+      setBattleLog((prev) => {
+        const next = [{ id: Date.now() + Math.random(), message, tone }, ...prev];
+        return next.slice(0, 5);
+      });
+    },
+    []
+  );
+
+  const techniqueCost = character === "gojo" ? 32 : 40;
+  const energyPercent = useMemo(() => Math.round((cursedEnergy / maxCursedEnergy) * 100), [cursedEnergy, maxCursedEnergy]);
+  const expProgressPercent = useMemo(() => Math.min(((experience % 500) / 500) * 100, 100), [experience]);
+  const comboHeat = useMemo(() => Math.min(combo / 15, 1), [combo]);
+  const spiritPressure = useMemo(() => Math.min(spirits.length / 8, 1), [spirits.length]);
+  const threatLevel = useMemo(() => Math.min(comboHeat * 0.6 + spiritPressure * 0.8 + (domainActive ? 0.3 : 0), 1), [comboHeat, spiritPressure, domainActive]);
+  const threatLabel = threatLevel > 0.75 ? "Critical" : threatLevel > 0.4 ? "Alert" : "Stable";
+  const domainReady = cursedEnergy >= 80;
+  const techniqueReady = cursedEnergy >= techniqueCost;
+  const pendingDomainEnergy = Math.max(0, 80 - Math.floor(cursedEnergy));
+  const pendingTechniqueEnergy = Math.max(0, techniqueCost - Math.floor(cursedEnergy));
+  const threatPercent = Math.round(threatLevel * 100);
+  const comboHeatPercent = Math.round(comboHeat * 100);
+  const targetSpirit = useMemo(() => {
+    if (spirits.length === 0) return null;
+    if (selectedSpiritId) {
+      const selected = spirits.find((s) => s.id === selectedSpiritId);
+      if (selected) {
+        return selected;
+      }
+    }
+    let closest = spirits[0];
+    let minDist = Infinity;
+    spirits.forEach((spirit) => {
+      const dist = Math.hypot(spirit.x - playerPos.x, spirit.y - playerPos.y);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = spirit;
+      }
+    });
+    return closest;
+  }, [spirits, selectedSpiritId, playerPos]);
+  const pointerAngle = useMemo(() => {
+    if (!targetSpirit) return 0;
+    return (Math.atan2(targetSpirit.y - playerPos.y, targetSpirit.x - playerPos.x) * 180) / Math.PI;
+  }, [targetSpirit, playerPos]);
+  const worldBackground = useMemo(() => {
+    const heatColor = `rgba(239, 68, 68, ${0.2 + comboHeat * 0.4})`;
+    const pressureColor = `rgba(14, 165, 233, ${0.15 + spiritPressure * 0.35})`;
+    const glowColor = `${currentConfig.glowColor}33`;
+    return `
+      radial-gradient(circle at ${30 + comboHeat * 40}% ${60 - spiritPressure * 30}%, ${heatColor}, transparent 55%),
+      radial-gradient(circle at ${70 - comboHeat * 20}% ${30 + spiritPressure * 30}%, ${pressureColor}, transparent 60%),
+      radial-gradient(circle at center, ${glowColor}, transparent 65%),
+      rgba(0,0,0,0.65)
+    `;
+  }, [comboHeat, spiritPressure, currentConfig.glowColor]);
+  const toneClasses: Record<BattleLogEntry["tone"], string> = {
+    info: "border-white/10 text-gray-200",
+    success: "border-emerald-500/30 text-emerald-200",
+    danger: "border-red-500/30 text-red-200",
+  };
+  const clampRadarCoord = (value: number) => Math.min(95, Math.max(5, value));
+
   // Helper: Add Floating Text
   const addFloatingText = useCallback((x: number, y: number, text: string, color: string = "text-white", isCrit: boolean = false) => {
     const newText: FloatingText = {
@@ -187,15 +260,17 @@ export default function Game() {
       setIsTraining(false);
       if (trainingInterval.current) clearInterval(trainingInterval.current);
       toast({ title: "Training Stopped" });
+      logEvent("Training halted. Movement focus only.", "info");
     } else {
       setIsTraining(true);
       toast({ title: "Training Started", description: "Regenerating Cursed Energy..." });
+      logEvent("Training engaged. Energy regeneration increased.", "success");
       trainingInterval.current = setInterval(() => {
         setSteps((prev) => prev + 10);
         setCursedEnergy((prev) => Math.min(prev + 10, maxCursedEnergy));
       }, 1000);
     }
-  }, [isTraining, maxCursedEnergy]);
+  }, [isTraining, maxCursedEnergy, logEvent]);
 
   // Toggle Pause
   const togglePause = useCallback(() => {
@@ -204,7 +279,8 @@ export default function Game() {
       title: isPaused ? "Game Resumed" : "Game Paused",
       description: isPaused ? "Keep fighting!" : "Press P or ESC to resume"
     });
-  }, [isPaused]);
+    logEvent(isPaused ? "Combat focus restored." : "Combat paused.", isPaused ? "success" : "info");
+  }, [isPaused, logEvent]);
 
   // Spawn a random spirit based on weights
   const spawnSpirit = useCallback(() => {
@@ -339,6 +415,7 @@ export default function Game() {
     if (isPaused || spirits.length === 0) {
       if (spirits.length === 0) {
         toast({ title: "No targets nearby", variant: "destructive" });
+        logEvent("No spirits within range.", "info");
       }
       return;
     }
@@ -349,6 +426,7 @@ export default function Game() {
     
     if (cursedEnergy < cost) {
       toast({ title: "Out of Cursed Energy!", variant: "destructive" });
+      logEvent(`Need ${Math.max(1, cost - Math.floor(cursedEnergy))} more cursed energy.`, "danger");
       return;
     }
 
@@ -393,6 +471,7 @@ export default function Game() {
       triggerShake(25);
       setTimeout(() => setBlackFlashActive(false), 200);
       addParticles(target.x, target.y, '#ff0000', 12);
+      logEvent("Black Flash unleashed! Damage amplified.", "success");
     } else {
       triggerShake(5);
       addParticles(target.x, target.y, '#ff6b6b', 5);
@@ -442,6 +521,8 @@ export default function Game() {
       addFloatingText(target.x, target.y - 5, "EXORCISED", "text-yellow-400", true);
       addFloatingText(target.x + 5, target.y - 10, `+${Math.floor(expGain)} XP`, "text-green-400", false);
       addParticles(target.x, target.y, '#ffd700', 10);
+      const gradeText = target.type === "special" ? "Special Grade" : `Grade ${target.type.replace("grade", "")}`;
+      logEvent(`Exorcised ${gradeText} spirit +${Math.floor(expGain)} XP`, "success");
       
       // Clear selection if target was selected
       if (selectedSpiritId === target.id) {
@@ -453,7 +534,7 @@ export default function Game() {
       newSpirits[targetIndex] = { ...target, hp: newHp };
       setSpirits(newSpirits);
     }
-  }, [isPaused, spirits, selectedSpiritId, character, cursedEnergy, playerPos, combo, highestCombo, experience, maxCursedEnergy, addFloatingText, addParticles]);
+  }, [isPaused, spirits, selectedSpiritId, character, cursedEnergy, playerPos, combo, highestCombo, experience, maxCursedEnergy, addFloatingText, addParticles, logEvent]);
 
   const switchCharacter = useCallback(() => {
     const chars: Character[] = ['yuji', 'gojo', 'megumi', 'nobara'];
@@ -464,7 +545,8 @@ export default function Game() {
       title: `Switched to ${charConfig[next].name}`,
       description: charConfig[next].passiveDesc
     });
-  }, [character]);
+    logEvent(`Switched to ${charConfig[next].name}.`, "info");
+  }, [character, logEvent]);
 
   const useDomainExpansion = useCallback(() => {
     if (isPaused) return;
@@ -472,10 +554,12 @@ export default function Game() {
     const cost = 80;
     if (cursedEnergy < cost) {
       toast({ title: "Insufficient Energy", variant: "destructive" });
+      logEvent("Need 80 cursed energy for Domain Expansion.", "danger");
       return;
     }
     setCursedEnergy((prev) => prev - cost);
     setDomainActive(true);
+    logEvent(`Domain Expansion: ${charConfig[character].domainName}`, "success");
     
     // Add dramatic particles
     for (let i = 0; i < 20; i++) {
@@ -502,10 +586,9 @@ export default function Game() {
         description: `Annihilated ${count} spirits! +${Math.floor(totalExp * 1.5)} XP`,
         className: "bg-purple-900/90 border-purple-500 text-white font-orbitron",
       });
+      logEvent("Domain collapsed. Field cleared.", "info");
     }, 2500);
-  }, [isPaused, cursedEnergy, spirits, character, addParticles]);
-
-  const currentConfig = charConfig[character];
+  }, [isPaused, cursedEnergy, spirits, character, addParticles, logEvent]);
 
   // Get spirit grade label and color
   const getSpiritGradeInfo = (type: string) => {
@@ -663,14 +746,162 @@ export default function Game() {
         </Button>
       </Card>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="p-4 bg-black/70 border-white/10 rounded-2xl backdrop-blur">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-orbitron tracking-[0.4em] text-white/50">THREAT LEVEL</p>
+              <p className={`text-2xl font-orbitron font-black ${threatLevel > 0.75 ? 'text-red-400' : threatLevel > 0.4 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                {threatLabel}
+              </p>
+            </div>
+            <Activity className={`h-10 w-10 ${threatLevel > 0.75 ? 'text-red-400' : threatLevel > 0.4 ? 'text-amber-300' : 'text-emerald-300'}`} />
+          </div>
+          <div className="mt-4">
+            <div className="flex justify-between text-xs text-white/50 font-mono">
+              <span>Intensity</span>
+              <span>{threatPercent}%</span>
+            </div>
+            <div className="mt-2 h-3 bg-white/5 rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-gradient-to-r from-emerald-400 via-amber-400 to-rose-500"
+                animate={{ width: `${threatPercent}%` }}
+                transition={{ type: "spring", stiffness: 60 }}
+              />
+            </div>
+            <div className="mt-3 text-[11px] text-white/70 font-mono flex justify-between">
+              <span>Spirits {spirits.length}/8</span>
+              <span>Combo {combo}x</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 bg-black/70 border-white/10 rounded-2xl backdrop-blur">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-orbitron tracking-[0.4em] text-white/50">ENERGY CORE</p>
+              <p className="text-xl font-orbitron text-white">Cursed Flow</p>
+            </div>
+            <Shield className="h-8 w-8 text-cyan-300" />
+          </div>
+          <div className="mt-4 space-y-3">
+            <div>
+              <div className="flex justify-between text-xs text-white/50 font-mono">
+                <span>Energy</span>
+                <span>{energyPercent}%</span>
+              </div>
+              <div className="mt-1 h-2.5 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full bg-gradient-to-r from-red-600 via-pink-500 to-yellow-300"
+                  animate={{ width: `${energyPercent}%` }}
+                  transition={{ type: "spring", stiffness: 60 }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs text-white/50 font-mono">
+                <span>EXP Loop</span>
+                <span>{Math.round(expProgressPercent)}%</span>
+              </div>
+              <div className="mt-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full bg-gradient-to-r from-yellow-500 to-amber-300"
+                  animate={{ width: `${Math.round(expProgressPercent)}%` }}
+                  transition={{ type: "spring", stiffness: 60 }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] font-orbitron">
+            <div className={`status-chip ${techniqueReady ? 'ready' : 'cooldown'}`}>
+              <span>Technique</span>
+              <span>{techniqueReady ? "READY" : `-${pendingTechniqueEnergy}`}</span>
+            </div>
+            <div className={`status-chip ${domainReady ? 'ready' : 'cooldown'}`}>
+              <span>Domain</span>
+              <span>{domainReady ? "READY" : `-${pendingDomainEnergy}`}</span>
+            </div>
+            <div className="status-chip neutral">
+              <span>Combo Heat</span>
+              <span>{comboHeatPercent}%</span>
+            </div>
+            <div className="status-chip neutral">
+              <span>Training</span>
+              <span>{isTraining ? "ACTIVE" : "IDLE"}</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 bg-black/70 border-white/10 rounded-2xl backdrop-blur">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-orbitron tracking-[0.4em] text-white/50">BATTLE FEED</p>
+              <p className="text-xl font-orbitron text-white">Tactical Log</p>
+            </div>
+            <Sparkles className="h-8 w-8 text-amber-300" />
+          </div>
+          <div className="mt-4 flex flex-col gap-2">
+            {battleLog.map((entry) => (
+              <div key={entry.id} className={`battle-log-entry ${toneClasses[entry.tone]}`}>
+                <span>{entry.message}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       {/* GAME WORLD */}
       <motion.div 
         ref={gameWorldRef}
         className="flex-1 relative rounded-xl border-2 border-accent/20 game-world-gradient overflow-hidden shadow-inner cursor-crosshair"
+        style={{ backgroundImage: worldBackground }}
         animate={{ x: [-shake, shake, -shake, shake, 0], y: [-shake, shake, -shake, 0] }}
         transition={{ duration: 0.1 }}
         onClick={handleGameWorldClick}
       >
+        <div className="world-aurora absolute inset-0 pointer-events-none" style={{ opacity: 0.2 + threatLevel * 0.4 }} />
+        <div className="absolute top-4 left-4 z-30 flex items-center gap-2 px-4 py-2 rounded-full bg-black/70 border border-white/10 text-xs font-orbitron tracking-[0.3em] text-white">
+          <AlertTriangle className={`h-4 w-4 ${threatLevel > 0.75 ? 'text-red-400' : threatLevel > 0.4 ? 'text-amber-300' : 'text-emerald-300'}`} />
+          <span>{threatLabel}</span>
+          <span className="text-white/60">{threatPercent}%</span>
+        </div>
+
+        <div className="absolute top-4 right-4 hidden md:flex flex-col items-center text-[10px] uppercase tracking-[0.3em] text-white/60 z-30">
+          <div className="relative h-24 w-24 rounded-full border border-white/20 bg-black/60 overflow-hidden world-radar">
+            <div className="absolute inset-0 world-radar-sweep" />
+            <div
+              className="absolute w-2 h-2 bg-cyan-300 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+              style={{ left: `${clampRadarCoord(playerPos.x)}%`, top: `${clampRadarCoord(playerPos.y)}%`, transform: "translate(-50%, -50%)" }}
+            />
+            {spirits.map((spirit) => (
+              <div
+                key={`radar-${spirit.id}`}
+                className={`absolute w-2 h-2 rounded-full ${spirit.type === 'special' ? 'bg-red-400' : 'bg-amber-300'}`}
+                style={{ left: `${clampRadarCoord(spirit.x)}%`, top: `${clampRadarCoord(spirit.y)}%`, transform: "translate(-50%, -50%)" }}
+              />
+            ))}
+          </div>
+          <span className="mt-2 flex items-center gap-1">
+            <Radar className="h-3 w-3" />
+            RADAR
+          </span>
+        </div>
+
+        {targetSpirit && !domainActive && (
+          <motion.div
+            key="target-pointer"
+            className="absolute z-20 pointer-events-none origin-left target-pointer"
+            style={{
+              left: `${playerPos.x}%`,
+              top: `${playerPos.y}%`,
+              rotate: `${pointerAngle}deg`,
+            }}
+            animate={{ opacity: [0.4, 0.8, 0.4] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+          >
+            <div className="h-[3px] w-20 bg-gradient-to-r from-transparent via-amber-400 to-amber-200" />
+          </motion.div>
+        )}
         
         {/* Player */}
         <motion.div
@@ -816,6 +1047,27 @@ export default function Game() {
              exit={{ opacity: 0 }}
              className={`absolute inset-0 z-0 pointer-events-none backdrop-blur-[2px] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] ${currentConfig.domainClass}`}
            />
+        )}
+
+        {targetSpirit && (
+          <div className="absolute bottom-4 left-4 z-30 w-60 rounded-2xl bg-black/70 border border-white/10 p-3 backdrop-blur">
+            <p className="text-[10px] font-orbitron tracking-[0.4em] text-white/50">TARGET LOCK</p>
+            <div className="mt-2 flex items-center gap-3">
+              <span className="text-3xl drop-shadow-[0_0_10px_rgba(0,0,0,0.6)]">{targetSpirit.emoji}</span>
+              <div className="flex-1">
+                <p className="font-orbitron text-sm text-white">
+                  {getSpiritGradeInfo(targetSpirit.type).label} • {Math.max(0, Math.floor(targetSpirit.hp))}
+                </p>
+                <div className="mt-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-gradient-to-r from-emerald-400 to-red-500"
+                    animate={{ width: `${Math.max(0, (targetSpirit.hp / targetSpirit.maxHp) * 100)}%` }}
+                    transition={{ type: "spring", stiffness: 80 }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Click hint when no spirits */}
